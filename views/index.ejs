@@ -124,6 +124,49 @@
     </div>
   </div>
 
+    <!-- Save to ID number modal -->
+  <div id="saveIdModal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>Save to your ID number</h2>
+      <p class="modal-subtitle">
+        Use your school ID and a password to keep pads linked to you.
+      </p>
+
+      <label class="modal-field">
+        <span>School ID number</span>
+        <input
+          id="idNumberInput"
+          type="text"
+          autocomplete="username"
+          placeholder="e.g. s23102264"
+        >
+      </label>
+
+      <label class="modal-field">
+        <span>Password</span>
+        <input
+          id="idPasswordInput"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Set a password (or reuse if you already have one)"
+        >
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" class="modal-btn subtle" id="saveIdCancel">
+          Cancel
+        </button>
+        <button type="button" class="modal-btn" id="loadFromIdBtn">
+          Load my pads
+        </button>
+        <button type="button" class="modal-btn primary" id="saveToIdConfirm">
+          Save current note
+        </button>
+      </div>
+    </div>
+  </div>
+
+
   <div id="toast" class="toast"></div>
 
   <script src="/js/main.js" defer></script>

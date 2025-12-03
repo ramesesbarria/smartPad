@@ -4,6 +4,7 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 51920;
@@ -17,7 +18,9 @@ const PORT = process.env.PORT || 51920;
  *   title: string,
  *   content: string,
  *   createdAt: number (ms),
- *   expiresAt: number (ms)
+ *   expiresAt: number (ms),
+ *   passwordHash: string | null,
+ *   ownerId: string | null
  * }
  */
 const pads = new Map();
@@ -68,20 +71,24 @@ async function savePadToDb(pad) {
   try {
     await db.execute(
       `
-      INSERT INTO pads (code, title, content, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO pads (code, title, content, created_at, expires_at, password_hash, owner_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         title = VALUES(title),
         content = VALUES(content),
         created_at = VALUES(created_at),
-        expires_at = VALUES(expires_at)
+        expires_at = VALUES(expires_at),
+        password_hash = VALUES(password_hash),
+        owner_id = VALUES(owner_id)
       `,
       [
         pad.code,
         pad.title,
         pad.content,
         new Date(pad.createdAt),
-        new Date(pad.expiresAt)
+        new Date(pad.expiresAt),
+        pad.passwordHash || null,
+        pad.ownerId || null
       ]
     );
   } catch (err) {
@@ -93,7 +100,7 @@ async function getPadFromDb(code) {
   if (!db) return null;
   try {
     const [rows] = await db.execute(
-      'SELECT code, title, content, created_at, expires_at FROM pads WHERE code = ? LIMIT 1',
+      'SELECT code, title, content, created_at, expires_at, password_hash, owner_id FROM pads WHERE code = ? LIMIT 1',
       [code]
     );
     if (rows.length === 0) return null;
@@ -105,7 +112,9 @@ async function getPadFromDb(code) {
       createdAt:
         row.created_at instanceof Date ? row.created_at.getTime() : Date.now(),
       expiresAt:
-        row.expires_at instanceof Date ? row.expires_at.getTime() : Date.now()
+        row.expires_at instanceof Date ? row.expires_at.getTime() : Date.now(),
+      passwordHash: row.password_hash || null,
+      ownerId: row.owner_id || null
     };
   } catch (err) {
     console.error('[DB] Error fetching pad:', err.message);
@@ -124,6 +133,38 @@ async function checkDbHealth() {
   }
 }
 
+// ---------- User helpers (for ID-number accounts) ----------
+
+async function getUserByIdNumber(idNumber) {
+  if (!db) return null;
+  try {
+    const [rows] = await db.execute(
+      'SELECT id_number, password_hash FROM user_accounts WHERE id_number = ? LIMIT 1',
+      [idNumber]
+    );
+    if (rows.length === 0) return null;
+    return {
+      idNumber: rows[0].id_number,
+      passwordHash: rows[0].password_hash
+    };
+  } catch (err) {
+    console.error('[DB] Error fetching user:', err.message);
+    return null;
+  }
+}
+
+async function createUser(idNumber, passwordHash) {
+  if (!db) return;
+  try {
+    await db.execute(
+      'INSERT INTO user_accounts (id_number, password_hash) VALUES (?, ?)',
+      [idNumber, passwordHash]
+    );
+  } catch (err) {
+    console.error('[DB] Error creating user:', err.message);
+  }
+}
+
 // ---------- Express config ----------
 
 app.set('view engine', 'ejs');
@@ -135,13 +176,13 @@ app.use(express.json());
 
 // ---------- Routes ----------
 
-// Home workspace (session notes UI)
+// Home workspace
 app.get('/', (req, res) => {
   res.render('index', { title: 'SmartPad' });
 });
 
-// Quick save pad (supports both form and AJAX/JSON)
-app.post('/quick-save', (req, res) => {
+// Quick save pad (with optional password + TTL)
+app.post('/quick-save', async (req, res) => {
   const { title, content, ttlMinutes, password } = req.body;
 
   const wantsJson =
@@ -159,7 +200,7 @@ app.post('/quick-save', (req, res) => {
   const now = Date.now();
 
   const expiresAt = Number.isNaN(ttl) || ttl <= 0
-    ? now + 60 * 60 * 1000 // default 1h
+    ? now + 60 * 60 * 1000
     : now + ttl * 60 * 1000;
 
   let code = generateCode(6);
@@ -167,18 +208,28 @@ app.post('/quick-save', (req, res) => {
     code = generateCode(6);
   }
 
-    const pad = {
+  let passwordHash = null;
+  const plain = typeof password === 'string' ? password.trim() : '';
+  if (plain) {
+    try {
+      passwordHash = await bcrypt.hash(plain, 10);
+    } catch (err) {
+      console.error('[Auth] Failed to hash pad password:', err.message);
+    }
+  }
+
+  const pad = {
     code,
     title: title || 'Untitled',
     content,
     createdAt: now,
     expiresAt,
-    password: password || null // currently not enforced on read; we'll wire that later
+    passwordHash,
+    ownerId: null
   };
 
-
   pads.set(code, pad);
-  savePadToDb(pad);
+  await savePadToDb(pad);
 
   if (wantsJson) {
     return res.json({
@@ -189,11 +240,10 @@ app.post('/quick-save', (req, res) => {
     });
   }
 
-  // Fallback if some client still posts a normal form
   res.redirect(`/pad/${pad.code}`);
 });
 
-// Open pad from a code submitted via form (used earlier; kept for compatibility)
+// Open pad via form fallback
 app.post('/open', (req, res) => {
   const { code } = req.body;
   if (!code || !code.trim()) {
@@ -203,9 +253,10 @@ app.post('/open', (req, res) => {
   res.redirect(`/pad/${encodeURIComponent(normalized)}`);
 });
 
-// JSON API to load a pad into the workspace
+// JSON API: load a pad (supports pad-level password)
 app.get('/api/pad/:code', async (req, res) => {
   const { code } = req.params;
+  const suppliedPassword = req.query.password;
   const now = Date.now();
 
   let pad = pads.get(code);
@@ -226,6 +277,27 @@ app.get('/api/pad/:code', async (req, res) => {
     pads.set(code, pad);
   }
 
+  if (pad.passwordHash) {
+    if (!suppliedPassword || !suppliedPassword.trim()) {
+      return res
+        .status(401)
+        .json({ ok: false, error: 'Password required', requiresPassword: true });
+    }
+    try {
+      const ok = await bcrypt.compare(suppliedPassword.trim(), pad.passwordHash);
+      if (!ok) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'Incorrect password', requiresPassword: true });
+      }
+    } catch (err) {
+      console.error('[Auth] Password check failed:', err.message);
+      return res
+        .status(500)
+        .json({ ok: false, error: 'Password check failed' });
+    }
+  }
+
   res.json({
     ok: true,
     pad: {
@@ -238,9 +310,10 @@ app.get('/api/pad/:code', async (req, res) => {
   });
 });
 
-// Read-only pad view (for sharable URLs)
+// Read-only pad view (for /CODE links) with password page when needed
 app.get('/pad/:code', async (req, res) => {
   const { code } = req.params;
+  const providedPassword = req.query.password;
   const now = Date.now();
 
   let pad = pads.get(code);
@@ -265,11 +338,185 @@ app.get('/pad/:code', async (req, res) => {
     pads.set(code, pad);
   }
 
+  if (pad.passwordHash) {
+    if (!providedPassword || !providedPassword.trim()) {
+      return res.render('pad-password', {
+        title: 'Password required',
+        code,
+        error: null
+      });
+    }
+    try {
+      const ok = await bcrypt.compare(providedPassword.trim(), pad.passwordHash);
+      if (!ok) {
+        return res.render('pad-password', {
+          title: 'Password required',
+          code,
+          error: 'Incorrect password. Please try again.'
+        });
+      }
+    } catch (err) {
+      console.error('[Auth] Password check failed (view):', err.message);
+      return res.status(500).send('Password check failed');
+    }
+  }
+
   res.render('pad', {
     title: pad.title,
     pad
   });
 });
+
+// ---------- Save to ID number: API routes ----------
+
+// Save current note to a student's ID
+app.post('/api/save-to-id', async (req, res) => {
+  const { idNumber, password, title, content } = req.body;
+
+  if (!db) {
+    return res
+      .status(500)
+      .json({ ok: false, error: 'Database is not configured on server' });
+  }
+
+  if (!content || !content.trim()) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'Content is required' });
+  }
+
+  if (!idNumber || !idNumber.trim() || !password || !password.trim()) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'ID number and password are required' });
+  }
+
+  const trimmedId = idNumber.trim();
+  const trimmedPassword = password.trim();
+
+  try {
+    let user = await getUserByIdNumber(trimmedId);
+
+    if (!user) {
+      const hash = await bcrypt.hash(trimmedPassword, 10);
+      await createUser(trimmedId, hash);
+      user = { idNumber: trimmedId, passwordHash: hash };
+    } else {
+      const ok = await bcrypt.compare(trimmedPassword, user.passwordHash);
+      if (!ok) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'Incorrect ID number or password' });
+      }
+    }
+
+    const now = Date.now();
+    const expiresAt = now + 10 * 365 * 24 * 60 * 60 * 1000; // ~10 years
+
+    let code = generateCode(6);
+    while (pads.has(code)) {
+      code = generateCode(6);
+    }
+
+    const pad = {
+      code,
+      title: title || 'Untitled',
+      content,
+      createdAt: now,
+      expiresAt,
+      passwordHash: null, // account-level auth, not per-pad
+      ownerId: trimmedId
+    };
+
+    pads.set(code, pad);
+    await savePadToDb(pad);
+
+    return res.json({
+      ok: true,
+      code: pad.code,
+      ownerId: pad.ownerId,
+      title: pad.title,
+      createdAt: pad.createdAt
+    });
+  } catch (err) {
+    console.error('[ID Save] Error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to save pad' });
+  }
+});
+
+// List all pads for a student's ID
+app.post('/api/list-id-pads', async (req, res) => {
+  const { idNumber, password } = req.body;
+
+  if (!db) {
+    return res
+      .status(500)
+      .json({ ok: false, error: 'Database is not configured on server' });
+  }
+
+  if (!idNumber || !idNumber.trim() || !password || !password.trim()) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'ID number and password are required' });
+  }
+
+  const trimmedId = idNumber.trim();
+  const trimmedPassword = password.trim();
+  const now = Date.now();
+
+  try {
+    const user = await getUserByIdNumber(trimmedId);
+    if (!user) {
+      return res
+        .status(401)
+        .json({ ok: false, error: 'No account found for that ID' });
+    }
+
+    const ok = await bcrypt.compare(trimmedPassword, user.passwordHash);
+    if (!ok) {
+      return res
+        .status(403)
+        .json({ ok: false, error: 'Incorrect ID number or password' });
+    }
+
+    const [rows] = await db.execute(
+      `
+      SELECT code, title, content, created_at, expires_at
+      FROM pads
+      WHERE owner_id = ?
+      ORDER BY created_at DESC
+      LIMIT 100
+      `,
+      [trimmedId]
+    );
+
+    const padsList = rows
+      .map((row) => ({
+        code: row.code,
+        title: row.title,
+        content: row.content,
+        createdAt:
+          row.created_at instanceof Date
+            ? row.created_at.getTime()
+            : now,
+        expiresAt:
+          row.expires_at instanceof Date
+            ? row.expires_at.getTime()
+            : now,
+        ownerId: trimmedId
+      }))
+      .filter((pad) => !pad.expiresAt || pad.expiresAt > now);
+
+    return res.json({ ok: true, pads: padsList });
+  } catch (err) {
+    console.error('[ID List] Error:', err.message);
+    return res
+      .status(500)
+      .json({ ok: false, error: 'Failed to load pads' });
+  }
+});
+
+// ---------- Misc ----------
 
 // Health check
 app.get('/health', async (req, res) => {
@@ -282,7 +529,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Allow direct links like /ABC123 -> /pad/ABC123
+// Direct /CODE -> /pad/CODE
 app.get('/:code', (req, res, next) => {
   const { code } = req.params;
   const reserved = new Set(['health', 'pad', 'api', 'quick-save', 'open']);
