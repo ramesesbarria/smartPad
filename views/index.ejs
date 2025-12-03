@@ -12,71 +12,120 @@
         <span class="brand-badge">SP</span>
         <div class="brand-text">
           <h1>SmartPad</h1>
-          <p class="subtitle">Lightweight pastebin-style notes with shareable codes</p>
+          <p class="subtitle">Quick notes, shareable pads, simple workspace</p>
         </div>
       </div>
     </header>
 
-    <main class="app-main">
-      <!-- Left: Quick Save -->
-      <section class="card">
-        <h2>Quick Save</h2>
-        <p class="card-description">
-          Create a disposable pad that expires after a time you choose.
-          Share the link or pad code with anyone.
-        </p>
-
-        <form action="/quick-save" method="POST" class="pad-form">
-          <label>
-            Title (optional)
-            <input type="text" name="title" placeholder="My note">
-          </label>
-
-          <label>
-            Content
-            <textarea name="content" rows="10" placeholder="Type or paste your text here..." required></textarea>
-          </label>
-
-          <label>
-            Time to live (TTL)
-            <select name="ttlMinutes">
-              <option value="15">15 minutes</option>
-              <option value="60" selected>1 hour</option>
-              <option value="1440">1 day</option>
-              <option value="10080">7 days</option>
-            </select>
-          </label>
-
-          <button type="submit" class="primary-btn">Save pad</button>
-        </form>
-      </section>
-
-      <!-- Right: Open existing pad -->
-      <section class="card secondary-card">
-        <h2>Open pad</h2>
-        <p class="card-description">
-          Already have a pad code or link? Enter a code below to view it.
-        </p>
-
-        <form action="/open" method="POST" class="open-form">
-          <label>
-            Pad code
-            <input type="text" name="code" placeholder="e.g. ABC123" required>
-          </label>
-          <button type="submit" class="secondary-btn full-width-btn">Open</button>
-        </form>
-
-        <hr class="card-divider">
-
-        <h3 class="mini-heading">How it works</h3>
-        <ul class="feature-list">
-          <li>✍️ Paste or type any text into Quick Save</li>
-          <li>⏱ Choose how long the pad should stay alive</li>
-          <li>🔗 Share the URL or pad code with others</li>
-          <li>🧹 After it expires, the pad is automatically removed</li>
+    <main class="workspace">
+      <!-- Left: session notes list -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <span>My notes this session</span>
+          <button type="button" class="icon-btn" id="newNoteBtn" title="New note">
+            +
+          </button>
+        </div>
+        <ul id="noteList" class="note-list">
+          <!-- filled by JS -->
         </ul>
+        <p class="sidebar-hint">
+          These notes live only in this browser session unless you quick save
+          or save them to your ID number.
+        </p>
+      </aside>
+
+      <!-- Right: editor -->
+      <section class="editor-area">
+        <form id="quickSaveForm" action="/quick-save" method="POST" class="editor-form">
+          <input type="hidden" name="title" id="quickSaveTitle" value="">
+          <input type="hidden" name="ttlMinutes" id="ttlHidden" value="60">
+
+          <textarea
+            id="editor"
+            name="content"
+            class="editor"
+            placeholder="Note title here (first line becomes the note title)..."
+            spellcheck="true"
+          ></textarea>
+        </form>
       </section>
     </main>
+
+    <!-- Bottom toolbar -->
+    <footer class="toolbar">
+      <button type="button" class="toolbar-btn" data-action="load">
+        Load a pad
+      </button>
+
+      <button type="button" class="toolbar-btn subtle" data-action="save-id">
+        Save to your ID number
+      </button>
+
+      <button
+        type="button"
+        class="toolbar-btn primary"
+        id="quickSaveButton"
+      >
+        Quick save
+      </button>
+
+      <button type="button" class="toolbar-btn" data-action="copy">
+        Copy
+      </button>
+
+      <button type="button" class="toolbar-btn" data-action="paste">
+        Paste
+      </button>
+
+      <button type="button" class="toolbar-btn" data-action="reset">
+        Reset
+      </button>
+    </footer>
   </div>
+
+  <!-- Quick save modal -->
+  <div id="quickSaveModal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>Quick save this note</h2>
+      <p class="modal-subtitle">
+        Choose how long this code will last and optionally add a password.
+      </p>
+
+      <label class="modal-field">
+        <span>Expires in</span>
+        <select id="ttlPreset">
+          <option value="10">10 minutes</option>
+          <option value="60" selected>1 hour</option>
+          <option value="1440">1 day</option>
+          <option value="10080">7 days</option>
+          <option value="43200">30 days (max)</option>
+        </select>
+      </label>
+
+      <label class="modal-field">
+        <span>Password (optional)</span>
+        <input
+          id="padPassword"
+          type="password"
+          autocomplete="off"
+          placeholder="Leave blank for no password"
+        >
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" class="modal-btn subtle" id="modalQuickSaveCancel">
+          Cancel
+        </button>
+        <button type="button" class="modal-btn primary" id="modalQuickSaveConfirm">
+          Save pad
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/js/main.js" defer></script>
 </body>
 </html>
