@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><%= title %> · SmartPad</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>SmartPad</h1>
+      <p class="subtitle">Pad code: <code><%= pad.code %></code></p>
+    </header>
+
+    <main class="app-main">
+      <section class="card">
+        <div class="pad-meta">
+          <h2><%= pad.title %></h2>
+          <p class="meta-line">
+            Created: <span><%= new Date(pad.createdAt).toLocaleString() %></span>
+          </p>
+          <p class="meta-line">
+            Expires: <span><%= new Date(pad.expiresAt).toLocaleString() %></span>
+          </p>
+        </div>
+
+        <pre class="pad-content"><%= pad.content %></pre>
+
+        <div class="pad-actions">
+          <a href="/" class="secondary-btn">Create another pad</a>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

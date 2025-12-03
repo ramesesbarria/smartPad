@@ -6,9 +6,53 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <main>
-    <h1>SmartPad</h1>
-    <p>Minimal notepad / pastebin hybrid – backend is running ✅</p>
-  </main>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>SmartPad</h1>
+      <p class="subtitle">Quick, disposable notes with shareable codes</p>
+    </header>
+
+    <main class="app-main">
+      <section class="card">
+        <h2>Quick Save</h2>
+        <p class="card-description">
+          Create a one-time pad with an expiration time. Share the code or URL with anyone.
+        </p>
+
+        <form action="/quick-save" method="POST" class="pad-form">
+          <label>
+            Title (optional)
+            <input type="text" name="title" placeholder="My note">
+          </label>
+
+          <label>
+            Content
+            <textarea name="content" rows="10" placeholder="Type or paste your text here..." required></textarea>
+          </label>
+
+          <label>
+            Time to live (TTL)
+            <select name="ttlMinutes">
+              <option value="15">15 minutes</option>
+              <option value="60" selected>1 hour</option>
+              <option value="1440">1 day</option>
+              <option value="10080">7 days</option>
+            </select>
+          </label>
+
+          <button type="submit" class="primary-btn">Save pad</button>
+        </form>
+      </section>
+
+      <section class="card secondary-card">
+        <h3>Coming soon</h3>
+        <ul class="feature-list">
+          <li>🔒 Optional password-protected pads</li>
+          <li>🪪 Pads linked to your school ID</li>
+          <li>📂 Dashboard to see your saved pads</li>
+        </ul>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><%= title %> · SmartPad</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>SmartPad</h1>
+    </header>
+
+    <main class="app-main">
+      <section class="card">
+        <h2>Pad not found</h2>
+        <p class="card-description">
+          We couldn’t find a pad with code <code><%= code %></code>.
+          It might have been deleted or never existed.
+        </p>
+        <a href="/" class="primary-btn">Go back home</a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

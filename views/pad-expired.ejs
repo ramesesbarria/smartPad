@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><%= title %> · SmartPad</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>SmartPad</h1>
+    </header>
+
+    <main class="app-main">
+      <section class="card">
+        <h2>Pad expired</h2>
+        <p class="card-description">
+          The pad with code <code><%= code %></code> has expired and is no longer available.
+        </p>
+        <a href="/" class="primary-btn">Create a new pad</a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
