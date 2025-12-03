@@ -1,13 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const db = require('./db');
 
 const app = express();
 
 // Use port 51920 so it's consistent with DCISM later
 const PORT = process.env.PORT || 51920;
 
-// ===== In-memory storage for pads (temporary, before DB) =====
+// ===== In-memory storage for pads (fallback + cache) =====
 const pads = new Map(); // key: code, value: pad object
 
 function generateCode(length = 6) {
@@ -19,7 +20,66 @@ function generateCode(length = 6) {
   return code;
 }
 
-// Cleanup expired pads every 5 minutes
+// ===== Database helper functions =====
+
+async function savePadToDb(pad) {
+  if (!db) return;
+  try {
+    await db.execute(
+      `
+      INSERT INTO pads (code, title, content, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        title = VALUES(title),
+        content = VALUES(content),
+        created_at = VALUES(created_at),
+        expires_at = VALUES(expires_at)
+      `,
+      [
+        pad.code,
+        pad.title,
+        pad.content,
+        new Date(pad.createdAt),
+        new Date(pad.expiresAt)
+      ]
+    );
+  } catch (err) {
+    console.error('[DB] Error saving pad:', err.message);
+  }
+}
+
+async function getPadFromDb(code) {
+  if (!db) return null;
+  try {
+    const [rows] = await db.execute(
+      'SELECT code, title, content, created_at, expires_at FROM pads WHERE code = ? LIMIT 1',
+      [code]
+    );
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      code: row.code,
+      title: row.title,
+      content: row.content,
+      createdAt: row.created_at instanceof Date ? row.created_at.getTime() : Date.now(),
+      expiresAt: row.expires_at instanceof Date ? row.expires_at.getTime() : Date.now()
+    };
+  } catch (err) {
+    console.error('[DB] Error fetching pad:', err.message);
+    return null;
+  }
+}
+
+async function cleanupExpiredPadsInDb() {
+  if (!db) return;
+  try {
+    await db.execute('DELETE FROM pads WHERE expires_at <= NOW()');
+  } catch (err) {
+    console.error('[DB] Error cleaning up expired pads:', err.message);
+  }
+}
+
+// Cleanup expired pads every 5 minutes (in-memory + DB)
 setInterval(() => {
   const now = Date.now();
   for (const [code, pad] of pads.entries()) {
@@ -27,6 +87,7 @@ setInterval(() => {
       pads.delete(code);
     }
   }
+  cleanupExpiredPadsInDb();
 }, 5 * 60 * 1000);
 
 // ===== Middleware =====
@@ -70,39 +131,81 @@ app.post('/quick-save', (req, res) => {
     code = generateCode(6);
   }
 
-  pads.set(code, {
+  const pad = {
     code,
     title: title || 'Untitled',
     content,
     createdAt: now,
     expiresAt
-  });
+  };
+
+  // Store in memory
+  pads.set(code, pad);
+
+  // Fire-and-forget: also save to DB (if configured)
+  savePadToDb(pad);
 
   // Redirect to view page for this pad
   res.redirect(`/pad/${code}`);
 });
 
-// View pad by code
-app.get('/pad/:code', (req, res) => {
-  const { code } = req.params;
-  const pad = pads.get(code);
-
-  if (!pad) {
-    return res.status(404).render('pad-not-found', { title: 'Pad not found', code });
+// Open existing pad by code (from home page form)
+app.post('/open', (req, res) => {
+  const { code } = req.body;
+  if (!code || !code.trim()) {
+    return res.redirect('/'); // later we can show a message
   }
 
+  const normalized = code.trim().toUpperCase();
+  res.redirect(`/pad/${encodeURIComponent(normalized)}`);
+});
+
+// View pad by code
+app.get('/pad/:code', async (req, res) => {
+  const { code } = req.params;
   const now = Date.now();
-  if (pad.expiresAt && pad.expiresAt <= now) {
+
+  // 1) Try in-memory cache first
+  let pad = pads.get(code);
+  if (pad && pad.expiresAt && pad.expiresAt <= now) {
     pads.delete(code);
-    return res.status(410).render('pad-expired', { title: 'Pad expired', code });
+    pad = null;
+  }
+
+  // 2) If not in memory, try DB
+  if (!pad) {
+    const dbPad = await getPadFromDb(code);
+    if (!dbPad) {
+      return res.status(404).render('pad-not-found', { title: 'Pad not found', code });
+    }
+    if (dbPad.expiresAt && dbPad.expiresAt <= now) {
+      return res.status(410).render('pad-expired', { title: 'Pad expired', code });
+    }
+
+    pad = dbPad;
+    // Cache it in memory for faster subsequent access
+    pads.set(code, pad);
   }
 
   res.render('pad', { title: pad.title, pad });
 });
 
 // Simple health-check route (optional)
-app.get('/health', (req, res) => {
-  res.json({ ok: true, padsCount: pads.size, timestamp: Date.now() });
+app.get('/health', async (req, res) => {
+  let dbOk = false;
+  try {
+    await db.execute('SELECT 1');
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+
+  res.json({
+    ok: true,
+    padsInMemory: pads.size,
+    dbOk,
+    timestamp: Date.now()
+  });
 });
 
 // Start server

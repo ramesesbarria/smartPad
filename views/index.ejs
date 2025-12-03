@@ -8,15 +8,22 @@
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <h1>SmartPad</h1>
-      <p class="subtitle">Quick, disposable notes with shareable codes</p>
+      <div class="brand">
+        <span class="brand-badge">SP</span>
+        <div class="brand-text">
+          <h1>SmartPad</h1>
+          <p class="subtitle">Lightweight pastebin-style notes with shareable codes</p>
+        </div>
+      </div>
     </header>
 
     <main class="app-main">
+      <!-- Left: Quick Save -->
       <section class="card">
         <h2>Quick Save</h2>
         <p class="card-description">
-          Create a one-time pad with an expiration time. Share the code or URL with anyone.
+          Create a disposable pad that expires after a time you choose.
+          Share the link or pad code with anyone.
         </p>
 
         <form action="/quick-save" method="POST" class="pad-form">
@@ -44,12 +51,29 @@
         </form>
       </section>
 
+      <!-- Right: Open existing pad -->
       <section class="card secondary-card">
-        <h3>Coming soon</h3>
+        <h2>Open pad</h2>
+        <p class="card-description">
+          Already have a pad code or link? Enter a code below to view it.
+        </p>
+
+        <form action="/open" method="POST" class="open-form">
+          <label>
+            Pad code
+            <input type="text" name="code" placeholder="e.g. ABC123" required>
+          </label>
+          <button type="submit" class="secondary-btn full-width-btn">Open</button>
+        </form>
+
+        <hr class="card-divider">
+
+        <h3 class="mini-heading">How it works</h3>
         <ul class="feature-list">
-          <li>🔒 Optional password-protected pads</li>
-          <li>🪪 Pads linked to your school ID</li>
-          <li>📂 Dashboard to see your saved pads</li>
+          <li>✍️ Paste or type any text into Quick Save</li>
+          <li>⏱ Choose how long the pad should stay alive</li>
+          <li>🔗 Share the URL or pad code with others</li>
+          <li>🧹 After it expires, the pad is automatically removed</li>
         </ul>
       </section>
     </main>

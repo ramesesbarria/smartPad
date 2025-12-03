@@ -21,23 +21,48 @@ body {
   gap: 24px;
 }
 
+/* Header / Brand */
+
 .app-header {
-  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.app-header h1 {
-  font-size: 2rem;
-  margin-bottom: 0.25rem;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 20% 20%, #38bdf8, #0f172a);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-size: 0.95rem;
+}
+
+.brand-text h1 {
+  font-size: 1.6rem;
+  line-height: 1.2;
 }
 
 .subtitle {
   color: #9ca3af;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
+
+/* Main layout */
 
 .app-main {
   display: grid;
-  grid-template-columns: minmax(0, 2.5fr) minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr);
   gap: 16px;
 }
 
@@ -46,6 +71,8 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Cards */
 
 .card {
   background: #020617;
@@ -57,12 +84,18 @@ body {
 
 .secondary-card {
   background: #020617;
-  border-style: dashed;
+  border-style: solid;
+  border-color: #1f2937;
 }
 
-.card h2, .card h3 {
+.card h2 {
   font-size: 1.2rem;
   margin-bottom: 0.5rem;
+}
+
+.card h3 {
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
 }
 
 .card-description {
@@ -71,13 +104,17 @@ body {
   margin-bottom: 1rem;
 }
 
-.pad-form {
+/* Forms */
+
+.pad-form,
+.open-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.pad-form label {
+.pad-form label,
+.open-form label {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -86,6 +123,7 @@ body {
 }
 
 .pad-form input[type="text"],
+.open-form input[type="text"],
 .pad-form select,
 .pad-form textarea {
   background: #020617;
@@ -102,12 +140,15 @@ body {
 }
 
 .pad-form input:focus,
+.open-form input:focus,
 .pad-form select:focus,
 .pad-form textarea:focus {
   outline: 2px solid #38bdf8;
   outline-offset: 1px;
   border-color: #38bdf8;
 }
+
+/* Buttons */
 
 .primary-btn,
 .secondary-btn {
@@ -147,6 +188,12 @@ body {
   background: #111827;
 }
 
+.full-width-btn {
+  width: 100%;
+}
+
+/* Feature list */
+
 .feature-list {
   list-style: none;
   display: flex;
@@ -156,13 +203,15 @@ body {
   color: #9ca3af;
 }
 
-.feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* Divider */
+
+.card-divider {
+  border: none;
+  border-top: 1px solid #1f2937;
+  margin: 16px 0 10px;
 }
 
-/* Pad view */
+/* Pad view (existing styles kept) */
 
 .pad-meta h2 {
   font-size: 1.3rem;
